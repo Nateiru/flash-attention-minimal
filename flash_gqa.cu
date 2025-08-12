@@ -18,14 +18,15 @@ void forward_kernel(const float* Q, const float* K, const float* V, const int N,
 
     // Define SRAM for Q,K,V,S
     extern __shared__ float sram[];
-    int tile_size = Bc * d;  // size of Qi, Kj, Vj
-    float* Qi = sram;
-    float* Kj = &sram[tile_size];
-    float* Vj = &sram[tile_size * 2];
-    float* S = &sram[tile_size * 3];
+    int tile_size = Bc * d;            // size of Qi, Kj, Vj
+    float* Qi = sram;                   // [Br, d]
+    float* Kj = &sram[tile_size];       // [Bc, d]
+    float* Vj = &sram[tile_size * 2];   // [Bc, d]
+    float* S = &sram[tile_size * 3];    // [Br, Bc]
 
     for (int j = 0; j < Tc; j++) {
-
+        
+        // ThreadBlock-Level 的线程数量是 Bc，每个线程 load 对应行的 Kj, Vj
         // Load Kj, Vj to SRAM
         for (int x = 0; x < d; x++) {
             Kj[(tx * d) + x] = K[kv_offset + (tile_size * j) + (tx * d) + x];
@@ -35,6 +36,7 @@ void forward_kernel(const float* Q, const float* K, const float* V, const int N,
 
         for (int i = 0; i < Tr; i++)  {
 
+            // ThreadBlock-Level 要求 Br = Bc，每个线程 load 对应行的 Q 并且计算
             // Load Qi to SRAM, l and m to registers
             for (int x = 0; x < d; x++) {
                 Qi[(tx * d) + x] = Q[q_offset + (tile_size * i) + (tx * d) + x];
@@ -42,6 +44,7 @@ void forward_kernel(const float* Q, const float* K, const float* V, const int N,
             float row_m_prev = m[lm_offset + (Br * i) + tx];
             float row_l_prev = l[lm_offset + (Br * i) + tx];
 
+            // 每个线程对应行的 Qi 和 Bc 行 Kj、Vj 进行计算
             // S = QK^T, row_m = rowmax(S)
             float row_m = -INFINITY;
             for (int y = 0; y < Bc; y++) {

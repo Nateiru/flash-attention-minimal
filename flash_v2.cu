@@ -18,13 +18,13 @@ void forward_kernel(const float* Q, const float* K, const float* V, const int N,
 
     // Define SRAM for Q,K,V,S
     extern __shared__ float sram[];
-    int tile_size_qo = Br * d;  // size of Qi, Oi
-    int tile_size_kv = Bc * d;  // size of Kj, Vj
-    float* Qi = sram;
-    float* Oi = &sram[tile_size_qo];
-    float* Kj = &sram[tile_size_qo * 2];
-    float* Vj = &sram[tile_size_qo * 2 + tile_size_kv];
-    float* S = &sram[tile_size_qo * 2 + tile_size_kv * 2];
+    int tile_size_qo = Br * d;                            // size of Qi, Oi
+    int tile_size_kv = Bc * d;                            // size of Kj, Vj
+    float* Qi = sram;                                      // [Br, d]
+    float* Oi = &sram[tile_size_qo];                       // [Br, d]
+    float* Kj = &sram[tile_size_qo * 2];                   // [Bc, d]    
+    float* Vj = &sram[tile_size_qo * 2 + tile_size_kv];    // [Bc, d]
+    float* S = &sram[tile_size_qo * 2 + tile_size_kv * 2]; // [Br, Bc]
 
     // Load Qi to SRAM
     for (int x = 0; x < d; x++) {
@@ -36,8 +36,10 @@ void forward_kernel(const float* Q, const float* K, const float* V, const int N,
     float row_l_prev = 0;
     float row_m_new, row_l_new;
 
+    // 计算 [bz * Br, (bz + 1) * Br) 行
     for (int j = 0; j < Tc; j++)  {
         
+        // 因果注意力（causal mask）
         if ((bz + 1) * Br < j * Bc) continue;
 
         // Load Kj, Vj to SRAM
